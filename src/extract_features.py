@@ -22,6 +22,7 @@ INPUT_CSV = Path("data/labeled/moves_labeled.csv")
 OUTPUT_DIR = Path("data/features")
 OUTPUT_CSV = OUTPUT_DIR / "features.csv"
 OUTPUT_CSV_V2 = OUTPUT_DIR / "features_v2.csv"
+OUTPUT_CSV_V3 = OUTPUT_DIR / "features_v3.csv"
 
 PIECE_VALUES = {
     chess.PAWN: 1,
@@ -416,9 +417,217 @@ def _tension_features(board: chess.Board) -> dict:
     }
 
 
+# ── Group 13: Delta features — before vs after move (V3) ─────────
+
+def _delta_features(board_before: chess.Board, move: chess.Move) -> dict:
+    """Compute feature deltas between position before and after the move.
+
+    After board.push(move), the turn flips. So what was 'player' becomes
+    'opponent' and vice-versa in the *_features helpers.
+    """
+    board_after = board_before.copy()
+    board_after.push(move)
+
+    hang_before = _hanging_features(board_before)
+    hang_after = _hanging_features(board_after)
+
+    mob_before = _mobility_features(board_before)
+    mob_after = _mobility_features(board_after)
+
+    tension_before = _tension_features(board_before)
+    tension_after = _tension_features(board_after)
+
+    king_before = _king_safety_v2(board_before)
+    king_after = _king_safety_v2(board_after)
+
+    threat_before = _threat_features(board_before)
+    threat_after = _threat_features(board_after)
+
+    return {
+        "delta_hanging_player": (
+            hang_after["hanging_pieces_opponent"]
+            - hang_before["hanging_pieces_player"]
+        ),
+        "delta_hanging_opponent": (
+            hang_after["hanging_pieces_player"]
+            - hang_before["hanging_pieces_opponent"]
+        ),
+        "delta_hanging_value_player": (
+            hang_after["hanging_value_opponent"]
+            - hang_before["hanging_value_player"]
+        ),
+        "delta_threats_against_player": (
+            threat_after["threats_against_opponent"]
+            - threat_before["threats_against_player"]
+        ),
+        "delta_mobility_player": (
+            mob_after["legal_moves_opponent"]
+            - mob_before["legal_moves_player"]
+        ),
+        "delta_mobility_opponent": (
+            mob_after["legal_moves_player"]
+            - mob_before["legal_moves_opponent"]
+        ),
+        "delta_contested_squares": (
+            tension_after["contested_squares"]
+            - tension_before["contested_squares"]
+        ),
+        "delta_king_attackers_player": (
+            king_after["king_attackers_opponent"]
+            - king_before["king_attackers_player"]
+        ),
+    }
+
+
+# ── Group 14: Opponent response — 1-ply look-ahead (V3) ─────────
+
+def _opponent_response_features(board_before: chess.Board, move: chess.Move) -> dict:
+    """Evaluate what the opponent can do immediately after our move."""
+    board_after = board_before.copy()
+    board_after.push(move)
+
+    best_capture_val = 0
+    num_good_captures = 0
+    can_check = False
+
+    for opp_move in board_after.legal_moves:
+        if board_after.gives_check(opp_move):
+            can_check = True
+
+        if board_after.is_capture(opp_move):
+            captured_sq = opp_move.to_square
+            captured_piece = board_after.piece_at(captured_sq)
+
+            if captured_piece is None and board_after.is_en_passant(opp_move):
+                capture_val = PIECE_VALUES[chess.PAWN]
+            elif captured_piece:
+                capture_val = PIECE_VALUES.get(captured_piece.piece_type, 0)
+            else:
+                capture_val = 0
+
+            attacker = board_after.piece_at(opp_move.from_square)
+            attacker_val = PIECE_VALUES.get(attacker.piece_type, 0) if attacker else 0
+            net_gain = capture_val - attacker_val
+
+            if net_gain > 0 or not board_before.attackers(board_before.turn, opp_move.to_square):
+                num_good_captures += 1
+
+            best_capture_val = max(best_capture_val, capture_val)
+
+    to_sq = move.to_square
+    moved_piece = board_after.piece_at(to_sq)
+    created_hanging = 0
+    if moved_piece and moved_piece.piece_type != chess.PAWN:
+        defenders = board_after.attackers(board_before.turn, to_sq)
+        attackers = board_after.attackers(not board_before.turn, to_sq)
+        if attackers and not defenders:
+            created_hanging = 1
+
+    return {
+        "opponent_best_capture_value": best_capture_val,
+        "opponent_can_check": int(can_check),
+        "opponent_num_good_captures": num_good_captures,
+        "created_hanging_self": created_hanging,
+    }
+
+
+# ── Group 15: Static Exchange Evaluation (V3) ────────────────────
+
+def _simple_see(board: chess.Board, square: chess.Square) -> int:
+    """Simplified Static Exchange Evaluation on a square.
+
+    Simulates alternating captures on the square, cheapest attacker first.
+    Returns the net material gain for the initial attacker (the side that
+    does NOT own the piece currently on the square).
+
+    Uses the standard swap/negamax algorithm:
+      gain[0] = target_value
+      gain[d] = value_of_piece_just_placed - gain[d-1]
+    Then: gain[d-1] = -max(-gain[d-1], gain[d])  working backwards.
+    """
+    piece = board.piece_at(square)
+    if piece is None:
+        return 0
+
+    def get_attackers_sorted(board, color, sq):
+        result = []
+        for s in board.attackers(color, sq):
+            p = board.piece_at(s)
+            if p:
+                result.append((PIECE_VALUES.get(p.piece_type, 0), s))
+        result.sort()
+        return result
+
+    target_val = PIECE_VALUES.get(piece.piece_type, 0)
+    defender_color = piece.color
+    attacker_color = not defender_color
+
+    att_list = get_attackers_sorted(board, attacker_color, square)
+    def_list = get_attackers_sorted(board, defender_color, square)
+
+    if not att_list:
+        return 0
+
+    gain = [target_val]
+    piece_on_sq_val = att_list[0][0]
+    att_idx = 1
+    def_idx = 0
+
+    while True:
+        if def_idx < len(def_list):
+            gain.append(piece_on_sq_val - gain[-1])
+            piece_on_sq_val = def_list[def_idx][0]
+            def_idx += 1
+        else:
+            break
+
+        if att_idx < len(att_list):
+            gain.append(piece_on_sq_val - gain[-1])
+            piece_on_sq_val = att_list[att_idx][0]
+            att_idx += 1
+        else:
+            break
+
+    d = len(gain) - 1
+    while d > 0:
+        gain[d - 1] = -max(-gain[d - 1], gain[d])
+        d -= 1
+
+    return gain[0]
+
+
+def _see_features(board_before: chess.Board, move: chess.Move) -> dict:
+    """SEE-based features for the played move."""
+    see_val = 0
+    is_losing = 0
+
+    if board_before.is_capture(move):
+        see_val = _simple_see(board_before, move.to_square)
+        if see_val < 0:
+            is_losing = 1
+
+    board_after = board_before.copy()
+    board_after.push(move)
+
+    worst_see = 0
+    player_color = board_before.turn
+    for pt in [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN]:
+        for sq in board_after.pieces(pt, player_color):
+            if board_after.attackers(not player_color, sq):
+                see = _simple_see(board_after, sq)
+                worst_see = min(worst_see, -see)
+
+    return {
+        "see_of_move": see_val,
+        "worst_see_against_player": worst_see,
+        "is_losing_capture": is_losing,
+    }
+
+
 # ── Row-level extraction ──────────────────────────────────────────
 
 _V2_ENABLED = False
+_V3_ENABLED = False
 
 
 def _extract_row(row: dict) -> dict:
@@ -434,12 +643,17 @@ def _extract_row(row: dict) -> dict:
     feats.update(_move_features(board, move))
     feats.update(_context_features(row))
 
-    if _V2_ENABLED:
+    if _V2_ENABLED or _V3_ENABLED:
         feats.update(_hanging_features(board))
         feats.update(_threat_features(board))
         feats.update(_pin_features(board))
         feats.update(_king_safety_v2(board))
         feats.update(_tension_features(board))
+
+    if _V3_ENABLED:
+        feats.update(_delta_features(board, move))
+        feats.update(_opponent_response_features(board, move))
+        feats.update(_see_features(board, move))
 
     feats["label"] = row["label"]
     return feats
@@ -449,21 +663,35 @@ def _extract_batch(rows: list[dict]) -> list[dict]:
     return [_extract_row(r) for r in rows]
 
 
-def _init_worker(v2: bool) -> None:
-    global _V2_ENABLED
+def _init_worker(v2: bool, v3: bool = False) -> None:
+    global _V2_ENABLED, _V3_ENABLED
     _V2_ENABLED = v2
+    _V3_ENABLED = v3
 
 
 # ── Main pipeline ─────────────────────────────────────────────────
 
-def run(num_workers: int, batch_size: int = 1000, v2: bool = False) -> None:
-    global _V2_ENABLED
-    _V2_ENABLED = v2
+def run(num_workers: int, batch_size: int = 1000, v2: bool = False, v3: bool = False) -> None:
+    global _V2_ENABLED, _V3_ENABLED
+    _V2_ENABLED = v2 or v3
+    _V3_ENABLED = v3
 
-    output_csv = OUTPUT_CSV_V2 if v2 else OUTPUT_CSV
+    if v3:
+        output_csv = OUTPUT_CSV_V3
+    elif v2:
+        output_csv = OUTPUT_CSV_V2
+    else:
+        output_csv = OUTPUT_CSV
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    tag = "V2 (52 features)" if v2 else "V1 (33 features)"
+    if v3:
+        tag = "V3 (67 features)"
+    elif v2:
+        tag = "V2 (52 features)"
+    else:
+        tag = "V1 (33 features)"
+
     print(f"[{tag}] Loading {INPUT_CSV} …")
     df = pd.read_csv(INPUT_CSV)
     print(f"Loaded {len(df):,} rows")
@@ -477,7 +705,7 @@ def run(num_workers: int, batch_size: int = 1000, v2: bool = False) -> None:
     all_features: list[dict] = []
     done = 0
 
-    with Pool(num_workers, initializer=_init_worker, initargs=(v2,)) as pool:
+    with Pool(num_workers, initializer=_init_worker, initargs=(v2 or v3, v3)) as pool:
         for batch_result in pool.imap(_extract_batch, batches):
             all_features.extend(batch_result)
             done += 1
@@ -503,7 +731,7 @@ def run(num_workers: int, batch_size: int = 1000, v2: bool = False) -> None:
     print(f"\n=== Feature Summary ===")
     for col in feature_cols:
         lo, hi = df_out[col].min(), df_out[col].max()
-        print(f"  {col:30s}  {str(df_out[col].dtype):7s}  [{lo}, {hi}]")
+        print(f"  {col:40s}  {str(df_out[col].dtype):7s}  [{lo}, {hi}]")
 
     print(f"\n=== Label Distribution ===")
     print(df_out["label"].value_counts().to_string())
@@ -525,8 +753,12 @@ def main() -> None:
         "--v2", action="store_true",
         help="Include tactical features (groups 8-12) and output to features_v2.csv",
     )
+    parser.add_argument(
+        "--v3", action="store_true",
+        help="Include look-ahead features (groups 8-15) and output to features_v3.csv",
+    )
     args = parser.parse_args()
-    run(num_workers=args.workers, batch_size=args.batch_size, v2=args.v2)
+    run(num_workers=args.workers, batch_size=args.batch_size, v2=args.v2, v3=args.v3)
 
 
 if __name__ == "__main__":

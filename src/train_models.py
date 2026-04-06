@@ -36,8 +36,10 @@ from sklearn.tree import DecisionTreeClassifier, export_text
 
 INPUT_CSV_V1 = Path("data/features/features.csv")
 INPUT_CSV_V2 = Path("data/features/features_v2.csv")
+INPUT_CSV_V3 = Path("data/features/features_v3.csv")
 OUTPUT_DIR_V1 = Path("data/models")
 OUTPUT_DIR_V2 = Path("data/models_v2")
+OUTPUT_DIR_V3 = Path("data/models_v3")
 
 RANDOM_STATE = 42
 
@@ -176,10 +178,13 @@ def print_feature_importance(name: str, model, feature_names: list[str], top_n: 
 
 # ── Main pipeline ─────────────────────────────────────────────────
 
-def run(v2: bool = False) -> None:
-    input_csv = INPUT_CSV_V2 if v2 else INPUT_CSV_V1
-    output_dir = OUTPUT_DIR_V2 if v2 else OUTPUT_DIR_V1
-    tag = "V2" if v2 else "V1"
+def run(v2: bool = False, v3: bool = False) -> None:
+    if v3:
+        input_csv, output_dir, tag = INPUT_CSV_V3, OUTPUT_DIR_V3, "V3"
+    elif v2:
+        input_csv, output_dir, tag = INPUT_CSV_V2, OUTPUT_DIR_V2, "V2"
+    else:
+        input_csv, output_dir, tag = INPUT_CSV_V1, OUTPUT_DIR_V1, "V1"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n{'='*60}")
@@ -228,9 +233,11 @@ def run(v2: bool = False) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train Decision Tree + Random Forest on chess features.")
-    parser.add_argument("--v2", action="store_true", help="Use V2 features (52 features incl. tactical)")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--v2", action="store_true", help="Use V2 features (52 features incl. tactical)")
+    group.add_argument("--v3", action="store_true", help="Use V3 features (67 features incl. look-ahead)")
     args = parser.parse_args()
-    run(v2=args.v2)
+    run(v2=args.v2, v3=args.v3)
 
 
 if __name__ == "__main__":
