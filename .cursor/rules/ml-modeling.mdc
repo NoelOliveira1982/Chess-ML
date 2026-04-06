@@ -1,0 +1,48 @@
+---
+description: Regras para modelagem e avaliação de ML
+globs: "**/*model*.py,**/*model*.ipynb,**/*train*.py,**/*eval*.py"
+alwaysApply: false
+---
+
+# ML Modeling Rules
+
+## Modelos permitidos
+
+- Obrigatório: `DecisionTreeClassifier` (interpretabilidade).
+- Secundário: `RandomForestClassifier`, `KNeighborsClassifier` ou `MLPClassifier`.
+- Não usar deep learning (PyTorch/TensorFlow) — fora do escopo.
+
+## Pré-processamento
+
+- KNN e MLP exigem `StandardScaler`. Usar `Pipeline` do sklearn.
+- Decision Tree e Random Forest não precisam de normalização.
+- Converter booleanos para int (0/1) antes do treino.
+
+## Split de dados
+
+- Sempre usar `train_test_split` com `stratify=y` e `random_state=42`.
+- Proporção: 70/15/15 (treino/validação/teste).
+- O conjunto de teste só é tocado UMA VEZ, no final.
+
+## Tuning
+
+- Usar `GridSearchCV` com `cv=5` e `scoring="f1"`.
+- Documentar o grid de hiperparâmetros testado.
+- Salvar `grid.best_params_` e `grid.best_score_` no notebook.
+
+## Métricas obrigatórias
+
+- `accuracy_score`, `classification_report`, `ConfusionMatrixDisplay`.
+- Enfatizar recall e F1 da classe "ruim" (detectar erros é o objetivo).
+- Plotar feature importances para modelos baseados em árvore.
+
+## Interpretabilidade
+
+- Extrair regras da árvore com `export_text` e traduzir para linguagem de xadrez.
+- Mostrar ao menos 5 exemplos comentados (FP e FN) com explicação no domínio.
+
+## Desbalanceamento
+
+- Primeiro tentar `class_weight="balanced"`.
+- Se insuficiente, testar undersampling. Documentar proporções antes/depois.
+- Nunca aplicar SMOTE/oversampling no conjunto de teste.

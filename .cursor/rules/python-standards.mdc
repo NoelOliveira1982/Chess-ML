@@ -1,0 +1,62 @@
+---
+description: Boas práticas de Python para o projeto de ML
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Standards
+
+## Estilo
+
+- Seguir PEP 8. Linhas com no máximo 100 caracteres.
+- Type hints em todas as funções públicas.
+- Docstrings no formato Google style (Args, Returns, Raises).
+
+## Imports
+
+- Agrupar: stdlib → third-party → locais, separados por linha em branco.
+- Nunca usar `from module import *`.
+
+```python
+# stdlib
+import io
+from pathlib import Path
+
+# third-party
+import chess
+import chess.pgn
+import pandas as pd
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+
+# locais
+from features import extract_features
+```
+
+## Dados
+
+- Usar `pathlib.Path` para caminhos de arquivo, nunca strings hardcoded.
+- Constantes no topo do módulo em UPPER_SNAKE_CASE.
+- Seeds sempre explícitas: `random.seed(42)`, `np.random.seed(42)`.
+
+## Funções
+
+- Funções curtas (<30 linhas). Se maior, extrair subfunções.
+- Sem side effects em funções de extração de features — recebem `chess.Board`, retornam dict/valor.
+- Usar generators (`yield`) para processar PGN em streaming.
+
+## Erros
+
+```python
+# Tratar erros de parsing de PGN explicitamente
+try:
+    elo = int(game.headers["WhiteElo"])
+except (KeyError, ValueError):
+    continue
+```
+
+## Não fazer
+
+- Não usar `print()` para logging — usar `logging` ou output estruturado.
+- Não carregar ficheiros PGN inteiros na memória — usar streaming.
+- Não commitar ficheiros de dados (.pgn, .csv grandes, .zst) no git.

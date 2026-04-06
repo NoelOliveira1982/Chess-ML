@@ -1,0 +1,38 @@
+---
+description: Convenções para Jupyter Notebooks do projeto
+globs: "**/*.ipynb"
+alwaysApply: false
+---
+
+# Notebook Conventions
+
+## Estrutura de células
+
+- Toda célula de código deve ser precedida por uma célula Markdown explicando o que faz e por quê.
+- Não criar células com mais de 30 linhas de código — dividir em células menores.
+- Primeira célula sempre: imports + constantes + seeds.
+
+## Markdown nas células
+
+- Usar headers (`##`, `###`) para separar seções lógicas.
+- Justificar decisões metodológicas inline (ex.: "Usamos depth 15 porque...").
+- Não escrever em inglês — todo o texto explicativo em português.
+
+## Outputs
+
+- Toda visualização (gráfico, tabela) deve ter título e labels nos eixos.
+- Usar `plt.tight_layout()` antes de `plt.show()`.
+- Para DataFrames, preferir `.head(10)` em vez de exibir o dataset inteiro.
+- Imprimir shapes após transformações: `print(f"Dataset: {df.shape}")`.
+
+## Reprodutibilidade
+
+- Seeds definidas no topo: `RANDOM_SEED = 42`.
+- Não depender de estado de células anteriores de forma implícita — se uma célula precisa de algo, deve ser óbvio.
+- Nunca usar `!pip install` dentro do notebook de modelagem — manter `requirements.txt` separado.
+
+## Separação de notebooks
+
+- `01_data_prep.ipynb`: coleta, filtragem, rotulagem, features → salva CSV.
+- `02_modeling.ipynb`: carrega CSV, treina, avalia, interpreta.
+- Isso evita re-rodar Stockfish a cada mudança na modelagem.

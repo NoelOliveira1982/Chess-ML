@@ -1,0 +1,8 @@
+python-chess
+zstandard
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+jupyter

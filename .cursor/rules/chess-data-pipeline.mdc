@@ -1,0 +1,54 @@
+---
+description: Regras para o pipeline de dados de xadrez (PGN, Stockfish, rotulagem)
+globs: "**/*data*.py,**/*data*.ipynb,**/*prep*.ipynb,**/*pgn*.py"
+alwaysApply: false
+---
+
+# Chess Data Pipeline
+
+## Fonte de dados
+
+- Usar exclusivamente Lichess open database (CC0). Ver `docs/02-dados/fonte-e-coleta.md`.
+- Nunca commitar ficheiros .pgn, .pgn.zst ou CSVs grandes no repositório.
+
+## Streaming de PGN
+
+- Sempre processar PGNs em streaming com `zstandard` + `chess.pgn.read_game()`.
+- Nunca carregar o ficheiro inteiro na memória.
+
+```python
+import zstandard as zstd
+import chess.pgn
+import io
+
+def stream_games(filepath):
+    dctx = zstd.ZstdDecompressor()
+    with open(filepath, "rb") as fh:
+        reader = dctx.stream_reader(fh)
+        text_stream = io.TextIOWrapper(reader, encoding="utf-8")
+        while True:
+            game = chess.pgn.read_game(text_stream)
+            if game is None:
+                break
+            yield game
+```
+
+## Filtros obrigatórios
+
+- Rating: ambos jogadores entre 1400–1700 (Lichess).
+- TimeControl: {"180+0", "180+2", "300+0", "300+3", "600+0", "600+5"}.
+- Termination: "Normal" apenas.
+- Fase do jogo: lances 8 a 40 (meio-jogo).
+
+## Rotulagem Stockfish
+
+- Usar `chess.engine.SimpleEngine.popen_uci()` com depth 15.
+- Delta = -score_depois - score_antes (perspectiva do jogador).
+- Bom: delta >= -50cp. Ruim: delta <= -150cp. Zona cinzenta: descartar.
+- Descartar posições com |eval| > 500cp antes do lance.
+- Sempre fechar engine com `engine.quit()` ao final.
+
+## Outputs intermediários
+
+- Salvar dataset rotulado em `data/labeled_moves.csv` para não re-rodar Stockfish.
+- Incluir colunas: fen, move_uci, delta_cp, label, e todas as features.

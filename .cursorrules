@@ -1,0 +1,33 @@
+# Chess Move Classifier — Contexto do Projeto
+
+## O que é este projeto
+
+Classificador supervisionado de qualidade de lances de xadrez (bom/ruim) para jogadores de rating 1200–1500, desenvolvido como projeto acadêmico da disciplina de Paradigmas de Aprendizagem de Máquina.
+
+## Stack
+
+- Python 3.10+, Jupyter Notebooks
+- `python-chess` + Stockfish para manipulação de xadrez e rotulagem
+- `pandas`, `numpy` para dados
+- `scikit-learn` para modelagem (Decision Tree, Random Forest/KNN/MLP)
+- `matplotlib`, `seaborn` para visualização
+- `zstandard` para descompressão de PGN do Lichess
+
+## Documentação
+
+Toda a metodologia, decisões e pipeline estão em `docs/`. Antes de implementar qualquer etapa, consultar o arquivo correspondente:
+
+- `docs/02-dados/` → coleta, filtragem, rotulagem
+- `docs/03-features/` → lista de features e como extrair
+- `docs/04-modelagem/` → modelos, hiperparâmetros, métricas
+- `docs/05-pipeline/` → estrutura do notebook
+- `docs/01-visao-geral/decisoes-de-projeto.md` → decisões já tomadas (DP-01 a DP-07)
+
+## Regras gerais
+
+- Responder sempre em português.
+- Código em Python, com variáveis e comentários em inglês.
+- Todo notebook deve ter cells Markdown explicativas antes de cada bloco de código.
+- Não criar engines de xadrez completas — o escopo é classificação supervisionada.
+- Dados vêm do Lichess (CC0). Faixa de rating no Lichess: 1400–1700 (equivale a 1200–1500 Chess.com).
+- Rotulagem via Stockfish depth 15: bom (delta >= -50cp), ruim (delta <= -150cp), zona cinzenta descartada.
