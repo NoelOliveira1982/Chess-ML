@@ -34,8 +34,10 @@ from sklearn.metrics import (
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_text
 
-INPUT_CSV = Path("data/features/features.csv")
-OUTPUT_DIR = Path("data/models")
+INPUT_CSV_V1 = Path("data/features/features.csv")
+INPUT_CSV_V2 = Path("data/features/features_v2.csv")
+OUTPUT_DIR_V1 = Path("data/models")
+OUTPUT_DIR_V2 = Path("data/models_v2")
 
 RANDOM_STATE = 42
 
@@ -174,10 +176,17 @@ def print_feature_importance(name: str, model, feature_names: list[str], top_n: 
 
 # ── Main pipeline ─────────────────────────────────────────────────
 
-def run() -> None:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def run(v2: bool = False) -> None:
+    input_csv = INPUT_CSV_V2 if v2 else INPUT_CSV_V1
+    output_dir = OUTPUT_DIR_V2 if v2 else OUTPUT_DIR_V1
+    tag = "V2" if v2 else "V1"
 
-    X_train, X_val, X_test, y_train, y_val, y_test = load_and_split(INPUT_CSV)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\n{'='*60}")
+    print(f"  Pipeline {tag}  —  input: {input_csv}")
+    print(f"{'='*60}")
+
+    X_train, X_val, X_test, y_train, y_val, y_test = load_and_split(input_csv)
     feature_names = list(X_train.columns)
 
     split_info = pd.DataFrame({
@@ -186,18 +195,18 @@ def run() -> None:
         "bom": [int((y_train == 0).sum()), int((y_val == 0).sum()), int((y_test == 0).sum())],
         "ruim": [int((y_train == 1).sum()), int((y_val == 1).sum()), int((y_test == 1).sum())],
     })
-    split_info.to_csv(OUTPUT_DIR / "split_info.csv", index=False)
+    split_info.to_csv(output_dir / "split_info.csv", index=False)
 
     # ── Train models
     dt = train_decision_tree(X_train, y_train, feature_names)
     rf = train_random_forest(X_train, y_train)
 
     # ── Save models
-    joblib.dump(dt, OUTPUT_DIR / "decision_tree.joblib")
-    joblib.dump(rf, OUTPUT_DIR / "random_forest.joblib")
-    print(f"\nModels saved to {OUTPUT_DIR}/")
+    joblib.dump(dt, output_dir / "decision_tree.joblib")
+    joblib.dump(rf, output_dir / "random_forest.joblib")
+    print(f"\nModels saved to {output_dir}/")
 
-    with open(OUTPUT_DIR / "feature_names.json", "w") as f:
+    with open(output_dir / "feature_names.json", "w") as f:
         json.dump(feature_names, f)
 
     # ── Evaluate on test set
@@ -209,9 +218,9 @@ def run() -> None:
     print_feature_importance("Random Forest", rf, feature_names)
 
     df_results = pd.DataFrame(results)
-    df_results.to_csv(OUTPUT_DIR / "results.csv", index=False)
+    df_results.to_csv(output_dir / "results.csv", index=False)
     print(f"\n{'='*60}")
-    print(f"Results summary saved to {OUTPUT_DIR / 'results.csv'}")
+    print(f"Results summary saved to {output_dir / 'results.csv'}")
     print(df_results.to_string(index=False))
 
 
@@ -219,8 +228,9 @@ def run() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train Decision Tree + Random Forest on chess features.")
-    parser.parse_args()
-    run()
+    parser.add_argument("--v2", action="store_true", help="Use V2 features (52 features incl. tactical)")
+    args = parser.parse_args()
+    run(v2=args.v2)
 
 
 if __name__ == "__main__":

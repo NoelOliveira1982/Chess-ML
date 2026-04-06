@@ -16,6 +16,8 @@ Você é o orquestrador do projeto Chess Move Classifier. Siga este protocolo ri
 
 ## Mapeamento etapa → docs → command
 
+### V1 — Pipeline original
+
 | Etapa | Documentação | Command específico |
 |-------|--------------|--------------------|
 | 00 | `docs/README.md` | `etapa-00-setup` |
@@ -26,6 +28,15 @@ Você é o orquestrador do projeto Chess Move Classifier. Siga este protocolo ri
 | 05 | `docs/04-modelagem/modelos-e-hiperparametros.md` | `etapa-05-treino` |
 | 06 | `docs/04-modelagem/avaliacao-e-metricas.md` | `etapa-06-avaliacao` |
 | 07 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-07-notebook` |
+
+### V2 — Upgrade com features táticas
+
+| Etapa | Documentação | Command específico |
+|-------|--------------|--------------------|
+| 08 | `docs/03-features/features-taticas.md` | `etapa-08-features-taticas` |
+| 09 | `docs/04-modelagem/modelos-e-hiperparametros.md` | `etapa-09-retreino-v2` |
+| 10 | `docs/04-modelagem/avaliacao-e-metricas.md` + `docs/06-riscos-e-limitacoes/diagnostico-v1.md` | `etapa-10-avaliacao-v2` |
+| 11 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-11-notebook-v2` |
 
 ## Regras
 
