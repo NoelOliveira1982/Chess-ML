@@ -19,6 +19,11 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | 09 — Re-treino V2 | concluída | 2026-04-06 | DT (gini, depth=7, leaf=1, CV-F1=0.3378) + RF (200 trees, depth=10, leaf=5, CV-F1=0.3638). Split idêntico à V1 (70/15/15). RF: accuracy 0.69 (+0.9pp), F1-ruim 0.37 (+1.4pp), AUC 0.71 (+2.4pp). `contested_squares` é feature #1 em ambos. |
 | 10 — Avaliação V1 vs V2 | concluída | 2026-04-06 | 18 artefatos gerados em `data/evaluation_v2/`. Comparação V1→V2: RF accuracy +0.85pp (0.68→0.69), F1-ruim +1.39pp (0.35→0.37), AUC +2.42pp (0.68→0.71), recall-ruim +1.87pp (0.55→0.57). DT: accuracy +1.26pp, F1-ruim +1.49pp, AUC +2.57pp. `contested_squares` é feature #1 em ambos. Melhoria consistente mas modesta — confirma que features posicionais+táticas leves ajudam mas não resolvem o gap (F1-ruim ainda <0.40). |
 | 11 — Notebook V2 | concluída | 2026-04-06 | 46 células (31 code + 15 md). Adicionadas seções: 6.6 Diagnóstico V1 (correlações, Cohen's d), 6.7 Comparação V1 vs V2 (tabela de deltas, barplot, ROC/PR overlay, features táticas), conclusão V2 com ciclo diagnóstico→melhoria. Execução ~34s. |
+| **V3 — Look-ahead** | | | |
+| 12 — Features look-ahead | pendente | | Features delta (antes vs depois do lance), resposta do adversário, SEE. 15 features novas → 67 totais. Spec em `docs/03-features/features-lookahead.md`. NÃO requer re-rotulagem. |
+| 13 — Re-treino V3 | pendente | | Treinar DT + RF com 67 features. Mesmos grids e split. |
+| 14 — Avaliação V2 vs V3 | pendente | | Comparar métricas V1→V2→V3. Meta: F1-ruim ≥ 0.50. |
+| 15 — Notebook V3 | pendente | | Atualizar notebook com seção V3 e comparação final. |
 
 ## Artefatos gerados
 
@@ -85,6 +90,8 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | V1 vs V2 PR overlay | `data/evaluation_v2/v1_vs_v2_pr_overlay.png` | 2026-04-06 |
 | Features táticas importância | `data/evaluation_v2/v1_vs_v2_feature_importance_new.png` | 2026-04-06 |
 | Análise features táticas | `data/evaluation_v2/tactical_features_analysis.csv` | 2026-04-06 |
+| Diagnóstico V2 | `docs/06-riscos-e-limitacoes/diagnostico-v2.md` | 2026-04-06 |
+| Spec features look-ahead | `docs/03-features/features-lookahead.md` | 2026-04-06 |
 
 ## Decisões tomadas durante o desenvolvimento
 

@@ -91,3 +91,21 @@ Log de decisões arquiteturais e metodológicas, com justificativas. Cada entrad
 - É o formato mais jogado na faixa 1200–1500 no Lichess — garante volume de dados.
 - Jogos muito longos (clássico) têm poucos dados online; jogos muito curtos (bullet, 1+0) são dominados por tempo, não por qualidade posicional.
 - Valores de `TimeControl` aceitos: "180+0", "180+2", "300+0", "300+3", "600+0", "600+5".
+
+---
+
+## DP-08 — Features look-ahead (V3): avaliar posição depois do lance
+
+**Decisão:** adicionar features que comparam a posição **antes e depois** do lance (deltas), avaliam a **resposta do adversário** (look-ahead 1 ply), e implementam **Static Exchange Evaluation** (SEE) simplificada.
+
+**Justificativa:**
+- O diagnóstico da V2 mostrou que todas as 52 features descrevem o estado pré-lance. Dois lances opostos (um brilhante, um desastroso) na mesma posição teriam features idênticas — o modelo não consegue distingui-los.
+- Pesquisa publicada (ResearchSquare 2025) atingiu F1 = 0.75 e AUC = 0.82 usando features de delta de avaliação + complexidade.
+- O Stockfish 18 adicionou "Threat Inputs" (pares atacante-alvo dinâmicos) na NNUE, ganhando +46 Elo — confirmando que informação dinâmica sobre ameaças é fundamental.
+- A implementação usa apenas `python-chess` (`board.push(move)` + re-extração de features), sem necessidade de chamar o Stockfish. Tempo adicional de extração estimado: +10-15s.
+
+**Trade-off:** duplica parte da lógica de extração (antes + depois), mas o custo computacional é desprezível comparado ao ganho informacional esperado.
+
+**Alternativa descartada:** usar Stockfish depth 1-3 como feature directa. Rejeitada por potencial circularidade com a rotulagem (feita com Stockfish depth 15), embora o depth 1 capture padrões diferentes. Pode ser considerada como V4 futura se o professor aceitar.
+
+**Ação:** implementar 15 features em 3 novos grupos (G13 deltas, G14 resposta do adversário, G15 SEE). Ver `docs/03-features/features-lookahead.md`.

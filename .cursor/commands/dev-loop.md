@@ -38,6 +38,15 @@ Você é o orquestrador do projeto Chess Move Classifier. Siga este protocolo ri
 | 10 | `docs/04-modelagem/avaliacao-e-metricas.md` + `docs/06-riscos-e-limitacoes/diagnostico-v1.md` | `etapa-10-avaliacao-v2` |
 | 11 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-11-notebook-v2` |
 
+### V3 — Upgrade com features look-ahead (delta + SEE)
+
+| Etapa | Documentação | Command específico |
+|-------|--------------|--------------------|
+| 12 | `docs/03-features/features-lookahead.md` | `etapa-12-features-lookahead` |
+| 13 | `docs/04-modelagem/modelos-e-hiperparametros.md` | `etapa-13-retreino-v3` |
+| 14 | `docs/04-modelagem/avaliacao-e-metricas.md` + `docs/06-riscos-e-limitacoes/diagnostico-v2.md` | `etapa-14-avaliacao-v3` |
+| 15 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-15-notebook-v3` |
+
 ## Regras
 
 - Nunca pular uma etapa. Se a etapa anterior não está concluída, concluí-la primeiro.
