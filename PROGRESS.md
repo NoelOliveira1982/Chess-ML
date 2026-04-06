@@ -13,7 +13,7 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | 04 — Engenharia de features | concluída | 2026-04-06 | 33 features (7 grupos), 109,290 linhas, 4.1s com 6 workers, sem nulos |
 | 05 — Treino dos modelos | concluída | 2026-04-06 | DT (gini, depth=7, leaf=20, CV-F1=0.3253) + RF (200 trees, depth=10, leaf=5, CV-F1=0.3499). Split 70/15/15 estratificado. RF superior em todas as métricas de teste. |
 | 06 — Avaliação e interpretação | concluída | 2026-04-06 | 13 artefatos gerados (plots + CSVs + regras traduzidas). Confusion matrices, feature importance (DT vs RF), ROC/PR curves, learning curves, análise qualitativa de 10 FP + 10 FN por modelo. RF superior em accuracy (0.68 vs 0.62), F1-ruim (0.35 vs 0.33), AUC (0.68 vs 0.65). DT tem recall-ruim ligeiramente maior (0.60 vs 0.55). |
-| 07 — Notebook final | concluída | 2026-04-06 | 28 células (13 code + 15 markdown), 8 seções: intro, dados, rotulagem, features, treino, avaliação, exemplos interpretados, conclusões. Execução OK (~11s). |
+| 07 — Notebook final | concluída | 2026-04-06 | 39 células (24 code + 15 md), 8 seções. Pipeline autocontido (RERUN_PIPELINE flag). Inclui curvas de aprendizado. Execução ~28s. README.md criado. |
 
 ## Artefatos gerados
 
@@ -52,6 +52,7 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | Análise de erros FP | `data/evaluation/error_analysis_fp.csv` | 2026-04-06 |
 | Análise de erros FN | `data/evaluation/error_analysis_fn.csv` | 2026-04-06 |
 | Notebook final | `notebooks/chess_move_classifier.ipynb` | 2026-04-06 |
+| README | `README.md` | 2026-04-06 |
 
 ## Decisões tomadas durante o desenvolvimento
 
@@ -62,4 +63,4 @@ _(registrar aqui qualquer desvio da documentação original e justificativa)_
 - **Features extraídas (etapa 04):** 33 features em 7 grupos (material 11, mobilidade 3, segurança do rei 4, estrutura de peões 4, controle do centro 3, características do lance 6, contexto 2). Todas numéricas/inteiras, sem nulos. Extração levou ~4s com 6 workers.
 - **Treino dos modelos (etapa 05):** Split estratificado 70/15/15 (76,546 / 16,350 / 16,394). Decision Tree: best = gini, depth=7, min_leaf=20 (CV-F1=0.3253). Random Forest: best = 200 trees, depth=10, min_leaf=5 (CV-F1=0.3499). Ambos com class_weight="balanced". RF ganhou em accuracy (0.68 vs 0.62), F1-ruim (0.35 vs 0.33) e AUC (0.68 vs 0.65). Top features: move_number, legal_moves_opponent, is_capture, legal_moves_player, material_diff. F1-ruim baixo é esperado dado o desbalanceamento 5.4:1 e a natureza difícil de prever erros apenas por features posicionais.
 - **Avaliação e interpretação (etapa 06):** 13 artefatos de avaliação gerados. FPs típicos: lances quietos em posições complicadas; FNs: erros táticos sutis não capturados pelas features posicionais. Regras da DT: primeira decisão é se o lance é captura, depois mobilidade do adversário, depois fase da partida. Learning curves mostram gap treino-validação estável — melhoria viria de features táticas, não de mais dados.
-- **Notebook final (etapa 07):** 28 células organizadas em 8 seções. Carrega dados pré-computados (CSVs + modelos joblib), gera visualizações inline (histogramas, heatmap de correlação, matrizes de confusão, feature importance, ROC/PR curves, árvore visual, análise de erros). Tempo de execução: ~11s.
+- **Notebook final (etapa 07):** 39 células (24 code + 15 markdown) em 8 seções. Pipeline autocontido via `RERUN_PIPELINE` flag — chama funções reais dos scripts src/ para download, filtragem, rotulagem, features e treino. Por padrão carrega dados pré-computados (~28s). Inclui curvas de aprendizado, análise de erros (FP/FN) para ambos os modelos, e regras traduzidas da DT. README.md criado com instruções de reprodução e resumo de resultados.
