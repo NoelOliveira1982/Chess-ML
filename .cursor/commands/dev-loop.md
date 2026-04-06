@@ -47,6 +47,15 @@ Você é o orquestrador do projeto Chess Move Classifier. Siga este protocolo ri
 | 14 | `docs/04-modelagem/avaliacao-e-metricas.md` + `docs/06-riscos-e-limitacoes/diagnostico-v2.md` | `etapa-14-avaliacao-v3` |
 | 15 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-15-notebook-v3` |
 
+### V4 — Upgrade de modelo (XGBoost + threshold tuning)
+
+| Etapa | Documentação | Command específico |
+|-------|--------------|--------------------|
+| 16 | `docs/04-modelagem/upgrade-v4-xgboost.md` + `docs/06-riscos-e-limitacoes/diagnostico-v3.md` | `etapa-16-doc-v4` |
+| 17 | `docs/04-modelagem/upgrade-v4-xgboost.md` | `etapa-17-treino-v4` |
+| 18 | `docs/04-modelagem/avaliacao-e-metricas.md` + `docs/06-riscos-e-limitacoes/diagnostico-v3.md` | `etapa-18-avaliacao-v4` |
+| 19 | `docs/05-pipeline/fluxo-do-notebook.md` | `etapa-19-notebook-v4` |
+
 ## Regras
 
 - Nunca pular uma etapa. Se a etapa anterior não está concluída, concluí-la primeiro.

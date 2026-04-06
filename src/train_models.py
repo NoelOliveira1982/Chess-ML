@@ -1,16 +1,20 @@
 """
-Train and evaluate two classifiers (Decision Tree + Random Forest) on chess
-move features.
+Train and evaluate classifiers on chess move features.
 
-Reads data/features/features.csv, performs a 70/15/15 stratified split,
+V1-V3: Decision Tree + Random Forest
+V4: Decision Tree + Random Forest + XGBoost + threshold tuning
+
+Reads data/features/features[_v*].csv, performs a 70/15/15 stratified split,
 runs GridSearchCV for hyperparameter tuning on each model, evaluates on the
 held-out test set, and persists trained models + results.
 
 Output:
-  data/models/decision_tree.joblib
-  data/models/random_forest.joblib
-  data/models/results.csv          (per-model metrics summary)
-  data/models/split_info.csv       (split sizes and class distributions)
+  data/models[_v*]/decision_tree.joblib
+  data/models[_v*]/random_forest.joblib
+  data/models[_v*]/xgboost.joblib        (V4 only)
+  data/models[_v*]/thresholds.json       (V4 only)
+  data/models[_v*]/results.csv
+  data/models[_v*]/split_info.csv
 """
 
 from __future__ import annotations
@@ -40,6 +44,7 @@ INPUT_CSV_V3 = Path("data/features/features_v3.csv")
 OUTPUT_DIR_V1 = Path("data/models")
 OUTPUT_DIR_V2 = Path("data/models_v2")
 OUTPUT_DIR_V3 = Path("data/models_v3")
+OUTPUT_DIR_V4 = Path("data/models_v4")
 
 RANDOM_STATE = 42
 
@@ -166,6 +171,101 @@ def train_random_forest(X_train, y_train) -> RandomForestClassifier:
     return grid.best_estimator_
 
 
+# ── XGBoost (V4) ──────────────────────────────────────────────────
+
+def train_xgboost(X_train, y_train):
+    from xgboost import XGBClassifier
+
+    print("\n>>> Training XGBoost (GridSearchCV) …")
+
+    pos_weight = float((y_train == 0).sum()) / float((y_train == 1).sum())
+
+    param_grid = {
+        "n_estimators": [100, 200, 300],
+        "max_depth": [3, 5, 7],
+        "learning_rate": [0.05, 0.1],
+        "min_child_weight": [1, 5],
+    }
+
+    grid = GridSearchCV(
+        XGBClassifier(
+            scale_pos_weight=pos_weight,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            eval_metric="logloss",
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+        ),
+        param_grid,
+        cv=5,
+        scoring="f1",
+        n_jobs=-1,
+        verbose=1,
+    )
+    t0 = time.time()
+    grid.fit(X_train, y_train)
+    elapsed = time.time() - t0
+
+    print(f"  Best params : {grid.best_params_}")
+    print(f"  Best CV F1  : {grid.best_score_:.4f}")
+    print(f"  Time        : {elapsed:.1f}s")
+
+    return grid.best_estimator_
+
+
+# ── Threshold tuning ──────────────────────────────────────────────
+
+def find_best_threshold(model, X_val, y_val) -> tuple[float, float]:
+    """Find threshold that maximizes F1-ruim on the validation set."""
+    y_proba = model.predict_proba(X_val)[:, 1]
+    thresholds = np.arange(0.15, 0.70, 0.01)
+    best_t, best_f1 = 0.50, 0.0
+
+    for t in thresholds:
+        y_pred_t = (y_proba >= t).astype(int)
+        f1 = f1_score(y_val, y_pred_t, pos_label=1)
+        if f1 > best_f1:
+            best_f1 = f1
+            best_t = t
+
+    return round(float(best_t), 2), round(float(best_f1), 4)
+
+
+def evaluate_with_threshold(name: str, model, X, y, threshold: float) -> dict:
+    """Evaluate model using a custom probability threshold."""
+    y_proba = model.predict_proba(X)[:, 1]
+    y_pred = (y_proba >= threshold).astype(int)
+
+    acc = accuracy_score(y, y_pred)
+    f1_good = f1_score(y, y_pred, pos_label=0)
+    f1_bad = f1_score(y, y_pred, pos_label=1)
+    auc = roc_auc_score(y, y_proba)
+    cm = confusion_matrix(y, y_pred)
+
+    print(f"\n{'='*60}")
+    print(f"  {name}  —  threshold={threshold:.2f}")
+    print(f"{'='*60}")
+    print(f"  Accuracy : {acc:.4f}")
+    print(f"  F1 (bom) : {f1_good:.4f}")
+    print(f"  F1 (ruim): {f1_bad:.4f}")
+    print(f"  ROC-AUC  : {auc:.4f}")
+
+    report = classification_report(y, y_pred, target_names=["bom", "ruim"])
+    print(f"\n{report}")
+    print(f"Confusion matrix:\n{cm}")
+
+    return {
+        "model": name,
+        "accuracy": round(acc, 4),
+        "f1_bom": round(f1_good, 4),
+        "f1_ruim": round(f1_bad, 4),
+        "roc_auc": round(auc, 4),
+        "recall_ruim": round(cm[1, 1] / (cm[1, 0] + cm[1, 1]), 4) if cm.shape == (2, 2) else float("nan"),
+        "precision_ruim": round(cm[1, 1] / (cm[0, 1] + cm[1, 1]), 4) if cm.shape == (2, 2) else float("nan"),
+        "threshold": threshold,
+    }
+
+
 # ── Feature importance ────────────────────────────────────────────
 
 def print_feature_importance(name: str, model, feature_names: list[str], top_n: int = 15) -> None:
@@ -178,8 +278,10 @@ def print_feature_importance(name: str, model, feature_names: list[str], top_n: 
 
 # ── Main pipeline ─────────────────────────────────────────────────
 
-def run(v2: bool = False, v3: bool = False) -> None:
-    if v3:
+def run(v2: bool = False, v3: bool = False, v4: bool = False) -> None:
+    if v4:
+        input_csv, output_dir, tag = INPUT_CSV_V3, OUTPUT_DIR_V4, "V4"
+    elif v3:
         input_csv, output_dir, tag = INPUT_CSV_V3, OUTPUT_DIR_V3, "V3"
     elif v2:
         input_csv, output_dir, tag = INPUT_CSV_V2, OUTPUT_DIR_V2, "V2"
@@ -209,18 +311,60 @@ def run(v2: bool = False, v3: bool = False) -> None:
     # ── Save models
     joblib.dump(dt, output_dir / "decision_tree.joblib")
     joblib.dump(rf, output_dir / "random_forest.joblib")
-    print(f"\nModels saved to {output_dir}/")
 
     with open(output_dir / "feature_names.json", "w") as f:
         json.dump(feature_names, f)
 
-    # ── Evaluate on test set
     results = []
-    results.append(evaluate("Decision Tree", dt, X_test, y_test, feature_names))
-    results.append(evaluate("Random Forest", rf, X_test, y_test, feature_names))
 
-    print_feature_importance("Decision Tree", dt, feature_names)
-    print_feature_importance("Random Forest", rf, feature_names)
+    if v4:
+        # ── Train XGBoost
+        xgb = train_xgboost(X_train, y_train)
+        joblib.dump(xgb, output_dir / "xgboost.joblib")
+
+        # ── Threshold tuning on validation set
+        print(f"\n{'='*60}")
+        print("  Threshold tuning on validation set")
+        print(f"{'='*60}")
+
+        thresholds = {}
+        for name, model in [("Decision Tree", dt), ("Random Forest", rf), ("XGBoost", xgb)]:
+            best_t, best_f1 = find_best_threshold(model, X_val, y_val)
+            thresholds[name] = best_t
+            print(f"  {name:20s}  best_threshold={best_t:.2f}  val_F1={best_f1:.4f}")
+
+        with open(output_dir / "thresholds.json", "w") as f:
+            json.dump(thresholds, f, indent=2)
+
+        # ── Evaluate all models with default threshold (0.50)
+        print(f"\n{'='*60}")
+        print("  Test set evaluation — default threshold (0.50)")
+        print(f"{'='*60}")
+        results.append(evaluate("Decision Tree", dt, X_test, y_test, feature_names))
+        results.append(evaluate("Random Forest", rf, X_test, y_test, feature_names))
+        results.append(evaluate("XGBoost", xgb, X_test, y_test, feature_names))
+
+        # ── Evaluate all models with tuned thresholds
+        print(f"\n{'='*60}")
+        print("  Test set evaluation — tuned thresholds")
+        print(f"{'='*60}")
+        for name, model in [("Decision Tree", dt), ("Random Forest", rf), ("XGBoost", xgb)]:
+            t = thresholds[name]
+            r = evaluate_with_threshold(f"{name} (t={t:.2f})", model, X_test, y_test, t)
+            results.append(r)
+
+        print_feature_importance("Decision Tree", dt, feature_names)
+        print_feature_importance("Random Forest", rf, feature_names)
+        print_feature_importance("XGBoost", xgb, feature_names)
+    else:
+        # ── V1/V2/V3: evaluate with default threshold
+        results.append(evaluate("Decision Tree", dt, X_test, y_test, feature_names))
+        results.append(evaluate("Random Forest", rf, X_test, y_test, feature_names))
+
+        print_feature_importance("Decision Tree", dt, feature_names)
+        print_feature_importance("Random Forest", rf, feature_names)
+
+    print(f"\nModels saved to {output_dir}/")
 
     df_results = pd.DataFrame(results)
     df_results.to_csv(output_dir / "results.csv", index=False)
@@ -232,12 +376,13 @@ def run(v2: bool = False, v3: bool = False) -> None:
 # ── CLI ────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train Decision Tree + Random Forest on chess features.")
+    parser = argparse.ArgumentParser(description="Train classifiers on chess features.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--v2", action="store_true", help="Use V2 features (52 features incl. tactical)")
     group.add_argument("--v3", action="store_true", help="Use V3 features (67 features incl. look-ahead)")
+    group.add_argument("--v4", action="store_true", help="V3 features + XGBoost + threshold tuning")
     args = parser.parse_args()
-    run(v2=args.v2, v3=args.v3)
+    run(v2=args.v2, v3=args.v3, v4=args.v4)
 
 
 if __name__ == "__main__":

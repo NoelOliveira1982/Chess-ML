@@ -109,3 +109,22 @@ Log de decisões arquiteturais e metodológicas, com justificativas. Cada entrad
 **Alternativa descartada:** usar Stockfish depth 1-3 como feature directa. Rejeitada por potencial circularidade com a rotulagem (feita com Stockfish depth 15), embora o depth 1 capture padrões diferentes. Pode ser considerada como V4 futura se o professor aceitar.
 
 **Ação:** implementar 15 features em 3 novos grupos (G13 deltas, G14 resposta do adversário, G15 SEE). Ver `docs/03-features/features-lookahead.md`.
+
+---
+
+## DP-09 — Upgrade de modelo: XGBoost + Threshold Tuning (V4)
+
+**Decisão:** adicionar XGBoost (Gradient Boosting) como terceiro modelo e implementar threshold tuning no validation set para todos os modelos, reutilizando as mesmas 67 features da V3.
+
+**Justificativa:**
+- O diagnóstico da V3 mostrou que as learning curves estão estáveis (gap treino-validação constante), indicando que o teto de performance está no **modelo**, não nas features.
+- O RF V3 tem precision-ruim=0.37 e recall-ruim=0.52 com threshold default 0.50 — um threshold optimizado pode melhorar o F1 sem alterar o modelo.
+- XGBoost constrói árvores sequencialmente, cada uma corrigindo os erros da anterior — ideal para melhorar a detecção dos FN residuais da V3.
+- Na literatura, Gradient Boosting tipicamente supera Random Forest em +2-5pp para problemas tabulares com desbalanceamento de classes.
+- `scale_pos_weight=5.39` no XGBoost é funcionalmente equivalente a `class_weight="balanced"` nos modelos existentes.
+
+**Trade-off:** XGBoost é menos interpretável que DT/RF por ter centenas de árvores pequenas. Mitigação: manter DT e RF como baselines comparativos e usar feature importance do XGBoost (que é comparável à do RF).
+
+**Alternativa descartada:** LightGBM — funcionalidade equivalente ao XGBoost para este problema, mas XGBoost é mais citado na literatura acadêmica e tem API mais estável no scikit-learn ecosystem.
+
+**Ação:** instalar `xgboost`, atualizar `train_models.py` com flag `--v4`, implementar threshold tuning. Ver `docs/04-modelagem/upgrade-v4-xgboost.md`.

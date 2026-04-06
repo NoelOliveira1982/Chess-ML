@@ -24,6 +24,11 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | 13 — Re-treino V3 | concluída | 2026-04-06 | DT (entropy, depth=10, leaf=20, CV-F1=0.3826) + RF (200 trees, depth=15, leaf=10, CV-F1=0.4354). Split idêntico (70/15/15). RF: accuracy 0.7849 (+9.37pp vs V2), F1-ruim 0.4312 (+6.48pp), AUC 0.7678 (+5.99pp), precision-ruim 0.3676 (+9.78pp). DT: accuracy 0.6762 (+4.60pp), F1-ruim 0.3821 (+3.92pp), AUC 0.7176 (+4.32pp). `worst_see_against_player` é feature #1 em ambos. Look-ahead domina o top 5. |
 | 14 — Avaliação V2 vs V3 | concluída | 2026-04-06 | 18 artefatos em `data/evaluation_v3/`. RF V3: accuracy 0.7849 (+9.37pp vs V2, +10.22pp vs V1), F1-ruim 0.4312 (+6.48pp vs V2, +7.87pp vs V1), AUC 0.7678 (+5.99pp vs V2, +8.41pp vs V1), precision-ruim 0.3676 (+9.78pp vs V2). recall-ruim caiu 4.95pp (trade-off precision↑/recall↓ → F1 sobe). DT V3: accuracy +4.60pp, F1-ruim +3.91pp, AUC +4.31pp vs V2. Look-ahead features dominam: `worst_see_against_player` (#1, 0.0611), `delta_mobility_opponent` (#2, 0.0478). Meta AUC ≥ 0.75 atingida (0.7678). Meta F1 ≥ 0.50 não atingida mas salto de +6.48pp é o maior do projeto. |
 | 15 — Notebook V3 | concluída | 2026-04-06 | 53 células (32 code + 21 md). Novas seções: 6.8 Diagnóstico V2 (correlações V2 + insight "mesmo features para lances diferentes"), 6.9 Comparação V1→V2→V3 (tabela de deltas 3-way, barplot 6 barras, ROC/PR overlay 6 curvas, importância das 15 look-ahead features com cores V1/V2/V3). Conclusão reescrita com tabela V1×V2×V3, narrativa do triplo ciclo diagnóstico→melhoria, evolução das regras da DT (tipo→tensão→consequências). Execução ~42s com VERSION=3, RERUN_PIPELINE=False. |
+| **V4 — XGBoost + Threshold** | | | |
+| 16 — Documentação V4 | concluída | 2026-04-06 | Diagnóstico V3 atualizado com resultados reais (F1=0.43, AUC=0.77). Spec V4 criado: `docs/04-modelagem/upgrade-v4-xgboost.md`. Motivação: learning curves estáveis indicam teto no modelo, não nas features. XGBoost + threshold tuning sobre mesmas 67 features V3. Meta: F1 ≥ 0.50. |
+| 17 — Treino V4 | concluída | 2026-04-06 | DT (entropy, depth=10, leaf=20, CV-F1=0.3826) + RF (200 trees, depth=15, leaf=10, CV-F1=0.4354) + XGB (300 trees, depth=7, lr=0.05, min_child=5, CV-F1=0.4487). XGB supera RF em CV-F1 (+1.33pp) e AUC (0.7809 vs 0.7678). Threshold tuning: DT=0.60, RF=0.52, XGB=0.61. XGB default: F1-ruim=0.4410 (+0.98pp vs RF), recall-ruim=0.617 (+9.55pp vs RF), AUC=0.7809 (+1.31pp). XGB com threshold: F1=0.4414, precision-ruim=0.4255 (primeira vez >0.40!). `is_losing_capture` é feature #1 do XGB (0.0785) — diferente do RF (#1=`worst_see_against_player`). |
+| 18 — Avaliação V4 | concluída | 2026-04-06 | 15 artefatos em `data/evaluation_v4/`. Comparação 4-way (9 modelos: DT/RF V1–V4 + XGB V4). XGB V4: F1-ruim=0.4410 (+0.98pp vs RF V3), recall-ruim=0.6170 (+9.55pp vs RF V3), AUC=0.7809 (+1.31pp vs RF V3). DT V4 e RF V4 idênticos a V3 (mesmas features, mesmos hiperparâmetros ótimos). Threshold analysis: DT=0.60, RF=0.52, XGB=0.61. Feature importance XGB: `is_losing_capture` #1 (0.0785), diferente do RF (#1=`worst_see_against_player`). Error analysis (10 FP + 10 FN do XGB). Gráficos: comparison 9 barras, ROC/PR overlay 9 curvas, confusion matrices 3-panel, feature importance 3-way (DT vs RF vs XGB), threshold sweep. |
+| 19 — Notebook V4 | concluída | 2026-04-06 | Notebook `comparacao.ipynb` atualizado para V1→V4: título, imports, modelo XGBoost, tabela comparativa com 9 modelos, deltas V4, barplot 9 barras, ROC/PR overlay com XGB, novas seções 10.1 (feature importance XGB com cores), 10.2 (threshold analysis sweep), 10.3 (métricas XGB default vs tuned), síntese atualizada. `notebook_utils.py` adaptado: `_unpack_models`, `plot_threshold_analysis`, `plot_xgb_feature_importance`. 26 células executam em ~8s. |
 
 ## Artefatos gerados
 
@@ -118,6 +123,28 @@ Arquivo de tracking para desenvolvimento iterativo. Atualizado automaticamente p
 | V1 vs V2 vs V3 PR overlay | `data/evaluation_v3/v1_v2_v3_pr_overlay.png` | 2026-04-06 |
 | Features look-ahead importância | `data/evaluation_v3/v3_lookahead_feature_importance.png` | 2026-04-06 |
 | Análise features look-ahead | `data/evaluation_v3/lookahead_features_analysis.csv` | 2026-04-06 |
+| Spec V4 XGBoost | `docs/04-modelagem/upgrade-v4-xgboost.md` | 2026-04-06 |
+| Modelo DT V4 | `data/models_v4/decision_tree.joblib` | 2026-04-06 |
+| Modelo RF V4 | `data/models_v4/random_forest.joblib` | 2026-04-06 |
+| Modelo XGBoost V4 | `data/models_v4/xgboost.joblib` | 2026-04-06 |
+| Thresholds V4 | `data/models_v4/thresholds.json` | 2026-04-06 |
+| Resultados V4 | `data/models_v4/results.csv` | 2026-04-06 |
+| Split info V4 | `data/models_v4/split_info.csv` | 2026-04-06 |
+| Feature names V4 | `data/models_v4/feature_names.json` | 2026-04-06 |
+| Script de avaliação V4 | `src/evaluate_v4.py` | 2026-04-06 |
+| Confusion matrices V4 | `data/evaluation_v4/confusion_matrices_v4.png` | 2026-04-06 |
+| Feature importance XGB V4 | `data/evaluation_v4/feature_importance_xgb_v4.png` | 2026-04-06 |
+| Feature importance 3-way V4 | `data/evaluation_v4/feature_importance_3way_v4.png` | 2026-04-06 |
+| ROC curves V4 | `data/evaluation_v4/roc_curves_v4.png` | 2026-04-06 |
+| PR curves V4 | `data/evaluation_v4/precision_recall_curves_v4.png` | 2026-04-06 |
+| Threshold analysis V4 | `data/evaluation_v4/threshold_analysis_v4.png` | 2026-04-06 |
+| Erros FP V4 | `data/evaluation_v4/error_analysis_fp_v4.csv` | 2026-04-06 |
+| Erros FN V4 | `data/evaluation_v4/error_analysis_fn_v4.csv` | 2026-04-06 |
+| V1→V4 métricas | `data/evaluation_v4/v1_v2_v3_v4_metrics.csv` | 2026-04-06 |
+| V1→V4 deltas | `data/evaluation_v4/v1_v2_v3_v4_deltas.csv` | 2026-04-06 |
+| V1→V4 comparação (plot) | `data/evaluation_v4/v1_v2_v3_v4_comparison.png` | 2026-04-06 |
+| V1→V4 ROC overlay | `data/evaluation_v4/v1_v2_v3_v4_roc_overlay.png` | 2026-04-06 |
+| V1→V4 PR overlay | `data/evaluation_v4/v1_v2_v3_v4_pr_overlay.png` | 2026-04-06 |
 
 ## Decisões tomadas durante o desenvolvimento
 

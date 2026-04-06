@@ -1,28 +1,27 @@
-# Evolução do Classificador — V1 → V2 → V3
+# Evolução do Classificador — V1 → V2 → V3 → V4
 
 ## Objetivo deste documento
 
-Documentar a **narrativa de evolução** do classificador de lances de xadrez ao longo de três iterações, explicando a motivação de cada upgrade, o que foi aprendido com cada diagnóstico, e por que a V3 é o passo natural para atingir a meta de F1 ≥ 0.50.
+Documentar a **narrativa de evolução** do classificador de lances de xadrez ao longo de quatro iterações, explicando a motivação de cada upgrade, o que foi aprendido com cada diagnóstico, e como o ciclo científico guiou as decisões.
 
 Este documento serve como material de apresentação do processo científico do projecto.
 
 ---
 
-## A jornada em três actos
+## A jornada em quatro actos
 
 ```
-V1 (33 features)        V2 (52 features)         V3 (67 features)
-"O cenário"              "As ameaças"              "O impacto"
-    │                        │                         │
-    ▼                        ▼                         ▼
-Descreve a posição →    Detecta perigos →         Avalia o que o lance
-material, mobilidade,   peças indefesas,          FAZ à posição:
-estrutura de peões,     cravadas, tensão,         deltas, respostas do
-controle do centro      ataques ao rei            adversário, trocas
-    │                        │                         │
-    ▼                        ▼                         ▼
-F1 = 0.35                F1 = 0.37                 Meta: F1 ≥ 0.50
-AUC = 0.68               AUC = 0.71                Meta: AUC ≥ 0.75
+V1 (33 features)      V2 (52 features)      V3 (67 features)       V4 (67 features)
+"O cenário"            "As ameaças"           "O impacto"            "O algoritmo"
+    │                      │                      │                      │
+    ▼                      ▼                      ▼                      ▼
+Descreve a posição    Detecta perigos       Avalia o que o lance   Extrai o máximo
+material, mobilidade  peças indefesas,      FAZ à posição:         das features com
+estrutura de peões    cravadas, tensão      deltas, SEE, resposta  Gradient Boosting
+    │                      │                      │                      │
+    ▼                      ▼                      ▼                      ▼
+F1 = 0.35              F1 = 0.37             F1 = 0.43              Meta: F1 ≥ 0.50
+AUC = 0.68             AUC = 0.71            AUC = 0.77 ✓           Meta: AUC ≥ 0.78
 ```
 
 ---
@@ -170,14 +169,14 @@ A V3 é computacionalmente barata porque usa apenas operações do `python-chess
 
 ## Evolução das métricas — visão consolidada
 
-| Métrica | Baseline (aleatório) | V1 | V2 | V3 (meta) |
-|---------|---------------------|----|----|-----------|
-| **F1 (ruim)** | ~0.16 | 0.35 | 0.37 | **≥ 0.50** |
-| **AUC** | 0.50 | 0.68 | 0.71 | **≥ 0.75** |
-| **Recall (ruim)** | ~15.6% | 55.2% | 57.1% | **≥ 60%** |
-| **Precision (ruim)** | ~15.6% | 25.9% | 27.0% | **≥ 40%** |
-| Nº features | — | 33 | 52 | 67 |
-| Tipo de informação | — | Cenário | + Ameaças | + Impacto |
+| Métrica | Baseline (aleatório) | V1 | V2 | V3 (real) | Meta |
+|---------|---------------------|----|----|-----------|------|
+| **F1 (ruim)** | ~0.16 | 0.35 | 0.37 | **0.43** | ≥ 0.50 |
+| **AUC** | 0.50 | 0.68 | 0.71 | **0.77** ✓ | ≥ 0.75 |
+| **Recall (ruim)** | ~15.6% | 55.2% | 57.1% | **52.1%** | ≥ 60% |
+| **Precision (ruim)** | ~15.6% | 25.9% | 27.0% | **36.8%** | ≥ 40% |
+| Nº features | — | 33 | 52 | 67 | — |
+| Tipo de informação | — | Cenário | + Ameaças | + Impacto | — |
 
 ### Sobre a meta de F1 ≥ 0.50
 
@@ -196,9 +195,11 @@ Um F1 de 0.50 na classe minoritária ("ruim", 15.6% do dataset) é um resultado 
 |--------|----------------------|-----------------|---------------|
 | V1 | 0.084 (`is_capture`) | 0.24 | Negligível — features não separam classes |
 | V2 | 0.143 (`contested_squares`) | 0.398 | Pequeno — primeira feature com sinal real |
-| V3 (esperado) | > 0.20 | > 0.50 | **Médio** — features capturam causa dos erros |
+| V3 | 0.147 (`opponent_best_capture_value`) | 0.383 | Pequeno–Médio — features capturam ameaças reais |
 
 A progressão mostra que cada iteração não é aleatória — é guiada por diagnóstico quantitativo que identifica a barreira e propõe a solução.
+
+**Nota sobre a V3:** O Cohen's d das features look-ahead ficou abaixo do esperado (0.383 vs 0.50), mas o impacto no modelo foi enorme (+6.48pp F1) porque as features de look-ahead capturam **interações** que individualmente têm d baixo mas combinadas são altamente informativas. `worst_see_against_player` (d=0.284) tornou-se a feature #1 do RF V3 com importância 0.0611 — o dobro da melhor V2.
 
 ---
 
@@ -231,36 +232,62 @@ A progressão mostra que cada iteração não é aleatória — é guiada por di
            └──────────── volta ao início
 ```
 
-Este ciclo foi executado **três vezes**:
+Este ciclo foi executado **quatro vezes**:
 
 | Iteração | Diagnóstico | Solução |
 |----------|------------|---------|
 | V1 → V2 | Features descrevem cenário, não ameaças | Adicionar features táticas (G8–G12) |
 | V2 → V3 | Features descrevem ameaças estáticas, não impacto do lance | Adicionar features de look-ahead (G13–G15) |
+| V3 → V4 | Learning curves estáveis, features boas mas modelo subóptimo | Upgrade de modelo: XGBoost + threshold tuning |
 
 A capacidade de **identificar problemas com dados** e **projetar soluções informadas** é o objectivo central da disciplina de Paradigmas de Aprendizagem de Máquina.
 
 ---
 
+## Diagnóstico V3: onde está o teto agora?
+
+### Resultados V3 (RF)
+
+| Métrica | V2 | V3 | Delta |
+|---|---|---|---|
+| F1-ruim | 0.37 | **0.43** | +6.48pp |
+| AUC | 0.71 | **0.77** | +5.99pp |
+| Precision-ruim | 0.27 | **0.37** | +9.78pp |
+| Recall-ruim | 0.57 | **0.52** | -4.95pp |
+
+### Evidência de que o teto é o modelo
+
+1. **Learning curves estáveis** — gap treino-validação constante (~12pp), mais dados não ajudam
+2. **RF depth ótimo subiu de 10→15** — features V3 permitem árvores mais profundas, sugerindo interações complexas que RF não explora completamente
+3. **Trade-off precision↑/recall↓** — o RF sacrificou recall para ganhar precision; threshold tuning pode recuperar recall sem perder precision
+4. **FN residuais** — maioria dos FN tem `worst_see_against_player=0` e `opponent_best_capture_value=3`; são padrões subtis que requerem combinações de features mais sofisticadas
+
+### Solução: V4 — XGBoost + Threshold Tuning
+
+**Gradient Boosting** constrói árvores sequencialmente, focando nos exemplos difíceis (os FN da V3). Combinado com **threshold tuning** no validation set, espera-se atingir F1 ≥ 0.50.
+
+Ver spec completo: [`docs/04-modelagem/upgrade-v4-xgboost.md`](../04-modelagem/upgrade-v4-xgboost.md)
+
+---
+
 ## Limitações conhecidas e trabalhos futuros
 
-### O que a V3 provavelmente NÃO resolve
+### O que a V4 provavelmente NÃO resolve
 
 - **Combinações táticas de 2+ lances** (ex.: sacrifício seguido de mate em 3) — o look-ahead de 1 ply não vê isso
 - **Avaliação posicional profunda** (ex.: peão fraco que só será explorado 20 lances depois) — requer conhecimento de engine
 - **Variabilidade entre jogadores** — o mesmo lance pode ser "bom para um 1400" e "ruim para um 1700"
 
-### Possíveis extensões (V4+)
+### Possíveis extensões (V5+)
 
 | Extensão | Impacto esperado | Viabilidade |
 |----------|-----------------|-------------|
 | Stockfish depth 1-3 como feature | F1 ~0.65-0.75 | Requer validação de circularidade com o professor |
 | Look-ahead de 2 plies | F1 ~0.55-0.65 | Custo computacional cresce quadraticamente |
-| Gradient Boosting (XGBoost/LightGBM) | +2-5pp sobre RF | Fácil de implementar, menor interpretabilidade |
 | CNN em representação bitboard 8×8 | F1 ~0.60-0.70 | Mudança de paradigma; fora do escopo de DT/RF |
 
 ---
 
 ## Resumo para apresentação
 
-> O projecto demonstra o ciclo completo de ML aplicado: **dados → features → modelo → avaliação → diagnóstico → melhoria**. Em três iterações, evoluímos de features que descrevem o *cenário* (V1), para features que detectam *ameaças* (V2), para features que medem o *impacto do lance* (V3). Cada iteração foi motivada por diagnóstico quantitativo — correlações, Cohen's d, análise de erros — e resultou em melhoria mensurável. A meta de F1 ≥ 0.50 é sustentada por referências académicas e pela progressão observada de d = 0.24 → 0.40 → 0.50+ nas features.
+> O projecto demonstra o ciclo completo de ML aplicado: **dados → features → modelo → avaliação → diagnóstico → melhoria**. Em quatro iterações, evoluímos de features que descrevem o *cenário* (V1), para features que detectam *ameaças* (V2), para features que medem o *impacto do lance* (V3), para um **modelo mais capaz** de explorar essas features (V4). Cada iteração foi motivada por diagnóstico quantitativo — correlações, Cohen's d, learning curves, análise de erros — e resultou em melhoria mensurável. As três primeiras iterações melhoraram os dados; a quarta reconhece que o teto passou a ser o algoritmo, demonstrando maturidade na análise do pipeline.

@@ -622,8 +622,16 @@ def plot_diagnostic(df_features: pd.DataFrame,
 # ── Comparison across versions ───────────────────────────────────
 
 
+def _unpack_models(cfg):
+    """Unpack load_models() handling both V1-V3 (dt, rf, names) and V4+ (dt, rf, xgb, names)."""
+    result = cfg.load_models()
+    if len(result) == 4:
+        return result[0], result[1], result[2], result[3]
+    return result[0], result[1], None, result[2]
+
+
 def plot_version_metrics_bars(configs: list, X_test, y_test) -> None:
-    """Bar chart comparing all versions side by side."""
+    """Bar chart comparing all versions side by side, including XGBoost for V4+."""
     metric_labels = {
         "accuracy": "Accuracy",
         "f1_ruim": "F1 (ruim)",
@@ -634,62 +642,65 @@ def plot_version_metrics_bars(configs: list, X_test, y_test) -> None:
     metrics_to_plot = list(metric_labels.keys())
     x = np.arange(len(metrics_to_plot))
 
-    n_configs = len(configs)
-    n_bars = n_configs * 2
+    model_entries = []
+    dt_colors = ["#C8D8E8", "#7BA3CC", "#4C72B0", "#08519C"]
+    rf_colors = ["#F5D8B0", "#E8A86E", "#DD8452", "#B8551E"]
+    xgb_color = "#2CA02C"
+
+    for ci, cfg in enumerate(configs):
+        dt, rf, xgb, fnames = _unpack_models(cfg)
+        X_sub = X_test[fnames]
+        model_entries.append((dt, f"DT V{cfg.version}",
+                              dt_colors[ci % len(dt_colors)], X_sub))
+        model_entries.append((rf, f"RF V{cfg.version}",
+                              rf_colors[ci % len(rf_colors)], X_sub))
+        if xgb is not None:
+            model_entries.append((xgb, f"XGB V{cfg.version}",
+                                  xgb_color, X_sub))
+
+    n_bars = len(model_entries)
     width = 0.80 / n_bars
 
-    dt_colors = ["#C8D8E8", "#7BA3CC", "#4C72B0"]
-    rf_colors = ["#F5D8B0", "#E8A86E", "#DD8452"]
-
-    fig, ax = plt.subplots(figsize=(16, 6))
-    bar_idx = 0
-    for ci, cfg in enumerate(configs):
-        dt, rf, fnames = cfg.load_models()
-        X_sub = X_test[fnames]
-        for model, name_prefix, color in [
-            (dt, "DT", dt_colors[ci % len(dt_colors)]),
-            (rf, "RF", rf_colors[ci % len(rf_colors)]),
-        ]:
-            yp = model.predict(X_sub)
-            yproba = model.predict_proba(X_sub)[:, 1]
-            values = [
-                accuracy_score(y_test, yp),
-                f1_score(y_test, yp, pos_label=1),
-                (yp[y_test == 1] == 1).mean(),
-                (y_test[yp == 1] == 1).mean() if (yp == 1).any() else 0,
-                roc_auc_score(y_test, yproba),
-            ]
-            label = f"{name_prefix} V{cfg.version}"
-            bars = ax.bar(x + bar_idx * width, values, width,
-                          label=label, color=color,
-                          edgecolor="white", linewidth=0.5)
-            for bar, val in zip(bars, values):
-                ax.text(bar.get_x() + bar.get_width() / 2,
-                        bar.get_height() + 0.006,
-                        f"{val:.3f}", ha="center", va="bottom",
-                        fontsize=6.5, rotation=90 if n_bars > 4 else 0)
-            bar_idx += 1
+    fig, ax = plt.subplots(figsize=(17, 7))
+    for bar_idx, (model, label, color, X_sub) in enumerate(model_entries):
+        yp = model.predict(X_sub)
+        yproba = model.predict_proba(X_sub)[:, 1]
+        values = [
+            accuracy_score(y_test, yp),
+            f1_score(y_test, yp, pos_label=1),
+            (yp[y_test == 1] == 1).mean(),
+            (y_test[yp == 1] == 1).mean() if (yp == 1).any() else 0,
+            roc_auc_score(y_test, yproba),
+        ]
+        bars = ax.bar(x + bar_idx * width, values, width,
+                      label=label, color=color,
+                      edgecolor="white", linewidth=0.5)
+        for bar, val in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.006,
+                    f"{val:.3f}", ha="center", va="bottom",
+                    fontsize=6, rotation=45)
 
     ax.set_xticks(x + (n_bars - 1) * width / 2)
     ax.set_xticklabels([metric_labels[m] for m in metrics_to_plot])
-    ax.set_ylim(0, 0.95)
+    ax.set_ylim(0, 1.05)
     ax.set_ylabel("Score")
     title_versions = " vs ".join(f"V{c.version}" for c in configs)
     ax.set_title(f"Evolução {title_versions} — Todas as Métricas",
                  fontsize=14)
-    ax.legend(loc="upper right", fontsize=8, ncol=2)
+    ax.legend(loc="upper right", fontsize=8, ncol=3)
     ax.grid(axis="y", alpha=0.3)
     plt.tight_layout()
     plt.show()
 
 
 def plot_version_roc_pr_overlay(configs: list, X_test, y_test) -> None:
-    """Overlay ROC and PR curves for multiple versions."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-    styles = [(":", 0.4), ("--", 0.6), ("-", 1.0)]
+    """Overlay ROC and PR curves for multiple versions, including XGBoost."""
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    styles = [(":", 0.4), ("--", 0.6), ("-.", 0.8), ("-", 1.0)]
 
     for ci, cfg in enumerate(configs):
-        dt, rf, fnames = cfg.load_models()
+        dt, rf, xgb, fnames = _unpack_models(cfg)
         X_sub = X_test[fnames]
         ls, alpha = styles[ci % len(styles)]
         lw = 2 if ci == len(configs) - 1 else 1
@@ -711,10 +722,20 @@ def plot_version_roc_pr_overlay(configs: list, X_test, y_test) -> None:
             name=f"RF V{cfg.version}", linestyle=ls, alpha=alpha,
             linewidth=lw)
 
+        if xgb is not None:
+            RocCurveDisplay.from_estimator(
+                xgb, X_sub, y_test, ax=axes[0],
+                name=f"XGB V{cfg.version}", linestyle="-", alpha=1.0,
+                linewidth=2.5, color="#2CA02C")
+            PrecisionRecallDisplay.from_estimator(
+                xgb, X_sub, y_test, ax=axes[1],
+                name=f"XGB V{cfg.version}", linestyle="-", alpha=1.0,
+                linewidth=2.5, color="#2CA02C")
+
     axes[0].plot([0, 1], [0, 1], "k--", alpha=0.3)
     title_versions = " vs ".join(f"V{c.version}" for c in configs)
     axes[0].set_title(f"Curvas ROC — {title_versions}", fontsize=13)
-    axes[0].legend(loc="lower right", fontsize=8)
+    axes[0].legend(loc="lower right", fontsize=7)
 
     prevalence = y_test.mean()
     axes[1].axhline(y=prevalence, color="k", linestyle="--", alpha=0.3,
@@ -802,6 +823,115 @@ def plot_tactical_features_importance(config) -> None:
 
     print(f"Feature tática #1: {df_tact.iloc[0]['feature_pt']} "
           f"(importância = {df_tact.iloc[0]['importance_rf_v2']:.4f})")
+
+
+def plot_threshold_analysis(configs: list, X_test, y_test) -> None:
+    """Plot F1-ruim vs threshold sweep for all models in the latest version with thresholds."""
+    cfg = configs[-1]
+    thresholds_dict = cfg.load_thresholds()
+    if not thresholds_dict:
+        print(f"V{cfg.version} não tem thresholds.json — pulando análise.")
+        return
+
+    dt, rf, xgb, fnames = _unpack_models(cfg)
+    X_sub = X_test[fnames]
+    sweep = np.arange(0.15, 0.71, 0.01)
+
+    model_info = [("Decision Tree", dt, "#4C72B0"),
+                  ("Random Forest", rf, "#DD8452")]
+    if xgb is not None:
+        model_info.append(("XGBoost", xgb, "#2CA02C"))
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for name, model, color in model_info:
+        proba = model.predict_proba(X_sub)[:, 1]
+        f1s = [f1_score(y_test, (proba >= t).astype(int),
+                        pos_label=1, zero_division=0) for t in sweep]
+        ax.plot(sweep, f1s, color=color, label=name, linewidth=2)
+
+    for name, _, color in model_info:
+        if name in thresholds_dict:
+            opt_t = thresholds_dict[name]
+            ax.axvline(x=opt_t, color=color, linestyle="--", alpha=0.7,
+                       label=f"{name} t*={opt_t:.2f}")
+
+    ax.axhline(y=0.50, color="gray", linestyle="--", alpha=0.5,
+               label="F1 = 0.50 (meta)")
+    ax.set_xlabel("Threshold")
+    ax.set_ylabel("F1-score (classe ruim)")
+    ax.set_title(f"Análise de Threshold — V{cfg.version} — F1-ruim vs Threshold",
+                 fontsize=14)
+    ax.legend(loc="best", fontsize=9)
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_xgb_feature_importance(cfg, X_test, top_n: int = 15) -> None:
+    """XGBoost feature importance with bars colored by feature origin."""
+    dt, rf, xgb, fnames = _unpack_models(cfg)
+    if xgb is None:
+        print(f"V{cfg.version} não tem XGBoost.")
+        return
+
+    TACTICAL = {
+        "hanging_pieces_player", "hanging_pieces_opponent",
+        "hanging_value_player", "hanging_value_opponent",
+        "min_attacker_vs_piece_player",
+        "threats_against_player", "threats_against_opponent",
+        "max_threat_value_player", "max_threat_value_opponent",
+        "pinned_pieces_player", "pinned_pieces_opponent",
+        "king_attackers_player", "king_attackers_opponent",
+        "king_open_files_player", "king_escape_squares_player",
+        "total_attacks_player", "total_attacks_opponent",
+        "contested_squares", "undefended_pieces_player",
+    }
+    LOOKAHEAD = {
+        "delta_hanging_player", "delta_hanging_opponent",
+        "delta_hanging_value_player", "delta_threats_against_player",
+        "delta_mobility_player", "delta_mobility_opponent",
+        "delta_contested_squares", "delta_king_attackers_player",
+        "opponent_best_capture_value", "opponent_can_check",
+        "opponent_num_good_captures", "created_hanging_self",
+        "see_of_move", "worst_see_against_player", "is_losing_capture",
+    }
+
+    def _group_color(name):
+        if name in LOOKAHEAD:
+            return "#55A868"
+        if name in TACTICAL:
+            return "#C44E52"
+        return "#4C72B0"
+
+    imp = xgb.feature_importances_
+    idx = np.argsort(imp)[::-1][:top_n]
+    labels = [translate(fnames[i]) for i in idx]
+    values = imp[idx]
+    colors = [_group_color(fnames[i]) for i in idx]
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    bars = ax.barh(range(top_n), values, color=colors)
+    ax.set_yticks(range(top_n))
+    ax.set_yticklabels(labels)
+    ax.invert_yaxis()
+    ax.set_xlabel("Importância")
+    ax.set_title(f"Top {top_n} Features — XGBoost V{cfg.version}", fontsize=14)
+
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
+                f"{val:.4f}", va="center", fontsize=8)
+
+    legend_elements = [
+        Patch(facecolor="#4C72B0", label="V1 — Posicionais"),
+        Patch(facecolor="#C44E52", label="V2 — Táticas"),
+        Patch(facecolor="#55A868", label="V3 — Look-ahead"),
+    ]
+    ax.legend(handles=legend_elements, loc="lower right", fontsize=9)
+    plt.tight_layout()
+    plt.show()
+
+    print(f"Feature #1 do XGBoost: {translate(fnames[idx[0]])} "
+          f"({fnames[idx[0]]}, imp={values[0]:.4f})")
 
 
 def print_version_deltas(deltas_csv: Path) -> None:
